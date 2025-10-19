@@ -1,2 +1,4 @@
 # jetacker-communication
-Communication suit for HiWonder Jetacker Robot
+Communication suite for HiWonder Jetacker Robot
+
+robot_gazebo and jetacker_description provided by HiWonder
