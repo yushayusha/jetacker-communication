@@ -2,6 +2,3 @@ bagfiles/
 build/
 install/
 log/
-src/nlopt/
-src/third_party_ws/
-src/ws_moveit/
