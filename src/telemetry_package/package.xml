@@ -27,5 +27,6 @@
      <depend>pathlib</depend>
      <depend>numpy</depend>
      <depend>pyqtgraph</depend>
+     <depend>signal</depend>
   </export>
 </package>

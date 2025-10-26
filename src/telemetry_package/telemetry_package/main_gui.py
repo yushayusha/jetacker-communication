@@ -1,5 +1,6 @@
 import sys
 import threading
+import signal
 import rclpy
 from rclpy.node import Node
 from pathlib import Path
@@ -138,11 +139,38 @@ def main():
     app = QApplication(sys.argv)
     window = MainWindow(node)
     window.show()
+
+     # --- Allow Ctrl+C to work while Qt is running ---
+    signal.signal(signal.SIGINT, lambda *args: graceful_shutdown(app, node, ros_thread))
+    timer = QTimer()
+    timer.start(100)
+    timer.timeout.connect(lambda: None)  # let Qt process signals
+
     app.exec()
 
     # Cleanup
-    rclpy.shutdown()
-    ros_thread.join()
+    graceful_shutdown(app, node, ros_thread)
 
 if __name__ == '__main__':
     main()
+
+def graceful_shutdown(app, node, ros_thread=None):
+    print("\n[Ctrl+C] Shutting down ROS 2 and GUI gracefully…")
+
+    # Stop GUI timers
+    for w in app.topLevelWidgets():
+        if hasattr(w, "timer"):
+            w.timer.stop()
+
+    # Shut down ROS 2
+    try:
+        rclpy.shutdown()
+    except Exception as e:
+        print(f"Warning during ROS shutdown: {e}")
+
+    # Wait for background threads
+    if ros_thread and ros_thread.is_alive():
+        ros_thread.join(timeout=2.0)
+
+    app.quit()
+    sys.exit(0)
