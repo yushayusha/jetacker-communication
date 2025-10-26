@@ -28,11 +28,12 @@ class MainWindow(QMainWindow):
         self.ros_node = ros_node
 
         # Load the .ui file
-        ui_file = QFile("robot_dashboard.ui")
+        ui_file = QFile("robot_dashboard.ui")   
         loader = QUiLoader()
         self.ui = loader.load(ui_file, self)
         self.setCentralWidget(self.ui)
         self.setWindowTitle("Twist Monitor")
+        self.ui.show()
 
         # Timer to update GUI
         self.timer = QTimer(self)
@@ -61,7 +62,6 @@ def main():
     # Start Qt GUI
     app = QApplication(sys.argv)
     window = MainWindow(node)
-    window.show()
     app.exec()
 
     # Cleanup
