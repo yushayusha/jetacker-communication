@@ -6,33 +6,38 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>220</height>
+    <width>817</width>
+    <height>541</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Twist Monitor</string>
+   <string>ROS Dashboard</string>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="layoutDirection">
+    <enum>Qt::LeftToRight</enum>
+   </property>
    <layout class="QVBoxLayout" name="verticalLayout">
-
     <item>
      <widget class="QLabel" name="lbl_title">
-      <property name="text">
-       <string>Live Twist Subscriber</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
+      <property name="enabled">
+       <bool>true</bool>
       </property>
       <property name="font">
        <font>
         <pointsize>12</pointsize>
+        <weight>75</weight>
         <bold>true</bold>
        </font>
       </property>
+      <property name="text">
+       <string>Live Twist Subscribe</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
      </widget>
     </item>
-
     <item>
      <widget class="QLabel" name="lbl_linear">
       <property name="text">
@@ -43,7 +48,6 @@
       </property>
      </widget>
     </item>
-
     <item>
      <widget class="QLabel" name="lbl_angular">
       <property name="text">
@@ -54,7 +58,24 @@
       </property>
      </widget>
     </item>
-
+    <item>
+     <widget class="QWidget" name="plot_widget" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>150</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_3"/>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="btn_shutdown">
+      <property name="text">
+       <string>Shutdown All Nodes (UGV Kill Switch)</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
  </widget>
