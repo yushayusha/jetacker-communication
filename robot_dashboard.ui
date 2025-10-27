@@ -31,7 +31,7 @@
        </font>
       </property>
       <property name="text">
-       <string>Live Twist Subscribe</string>
+       <string>Live Twist Subscriber</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
@@ -70,11 +70,40 @@
      </widget>
     </item>
     <item>
-     <widget class="QPushButton" name="btn_shutdown">
-      <property name="text">
-       <string>Shutdown All Nodes (UGV Kill Switch)</string>
+     <widget class="QWidget" name="odom_plot_widget" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>150</height>
+       </size>
       </property>
+      <layout class="QVBoxLayout" name="verticalLayout_4"/>
      </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QPushButton" name="btn_start_record">
+        <property name="text">
+         <string>Start Recording</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_stop_record">
+        <property name="text">
+         <string>Stop Recording</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_shutdown">
+        <property name="text">
+         <string>Shutdown All Nodes (UGV Kill Switch)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>

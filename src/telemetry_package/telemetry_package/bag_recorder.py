@@ -47,24 +47,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-def main(args=None):
-    rclpy.init(args=args)
-    dgn = DataGeneratorNode()
-    rclpy.spin(dgn)
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-
-
-
-def main(args=None):
-    rclpy.init(args=args)
-    sbr = SimpleBagRecorder()
-    rclpy.spin(sbr)
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

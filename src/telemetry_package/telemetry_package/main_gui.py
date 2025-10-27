@@ -12,6 +12,10 @@ from PySide6.QtCore import QFile, QTimer
 
 import numpy as np
 import pyqtgraph as pg
+import subprocess
+import os
+import time
+
 
 # -------------------------------
 # ROS 2 Node: subscribes to /controller/cmd_vel
@@ -51,6 +55,7 @@ class MainWindow(QMainWindow):
     def __init__(self, ros_node):
         super().__init__()
         self.ros_node = ros_node
+        self.bag_process = None
 
         # Load the .ui file
         ui_file = QFile("robot_dashboard.ui")   
@@ -73,7 +78,10 @@ class MainWindow(QMainWindow):
         self.curve_lin = self.plot.plot(pen='b', name='Linear x')
         self.curve_ang = self.plot.plot(pen='r', name='Angular z')
 
+        self.ui.btn_start_record.clicked.connect(self.start_recording)
+        self.ui.btn_stop_record.clicked.connect(self.stop_recording)
         self.ui.btn_shutdown.clicked.connect(self.shutdown_all)
+        
 
         self.ui.show()
         # Timer to update GUI
@@ -86,6 +94,38 @@ class MainWindow(QMainWindow):
         msg = self.ros_node.latest_msg
         self.ui.lbl_linear.setText(f"Linear Velocity: {msg.linear.x:.2f}")
         self.ui.lbl_angular.setText(f"Angular Velocity: {msg.angular.z:.2f}")
+
+    def start_recording(self):
+        if self.bag_process is not None:
+            QMessageBox.warning(self, "Recording", "Bag recording already running.")
+            return
+
+        # Create unique folder name
+        timestr = time.strftime("%Y%m%d_%H%M%S")
+        bag_dir = "rosbags/bag_"+ timestr +"/"
+
+        # Choose topics (modify as needed)
+        topics = ["/slam_toolbox/scan_visualization", "/slam_toolbox/feedback", "/slam_toolbox/graph_visualization", "/slam_toolbox/update", "/tf", "/tf_static", "/controller/cmd_vel"]
+
+        # Construct command
+        cmd = ["ros2", "bag", "record", "-o", bag_dir] + topics
+        try:
+            self.bag_process = subprocess.Popen(cmd)
+            print(f"[INFO] Recording started → {bag_dir}")
+            QMessageBox.information(self, "Recording Started", f"Recording to {bag_dir}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to start rosbag: {e}")
+
+    def stop_recording(self):
+        if self.bag_process is None:
+            QMessageBox.information(self, "Recording", "No recording is currently running.")
+            return
+
+        self.bag_process.terminate()
+        self.bag_process.wait(timeout=2)
+        print("[INFO] Recording stopped.")
+        QMessageBox.information(self, "Recording Stopped", "Rosbag recording stopped.")
+        self.bag_process = None
 
     def update_gui(self):
         msg = self.ros_node.latest_msg
@@ -171,6 +211,8 @@ def graceful_shutdown(app, node, ros_thread=None):
     # Wait for background threads
     if ros_thread and ros_thread.is_alive():
         ros_thread.join(timeout=2.0)
+    
+    
 
     app.quit()
     sys.exit(0)
