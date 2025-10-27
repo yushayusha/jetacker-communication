@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from pathlib import Path
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide6.QtUiTools import QUiLoader
@@ -46,15 +47,34 @@ class TwistSubscriber(Node):
         ang = self.angular_buffer[:count]
         return x, lin, ang
 
+class OdomSubscriber(Node):
+    def __init__(self, buffer_size=2000):
+        super().__init__('odom_gui_subscriber')
+        self.positions = np.zeros((buffer_size, 2))  # store x, y
+        self.index = 0
+        self.buffer_size = buffer_size
+        self.create_subscription(Odometry, '/odom', self.callback, 10)
+
+    def callback(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        i = self.index % self.buffer_size
+        self.positions[i] = [x, y]
+        self.index += 1
+
+    def get_positions(self):
+        count = min(self.index, self.buffer_size)
+        return self.positions[:count, :]
 
 
 # -------------------------------
 # Qt GUI Window
 # -------------------------------
 class MainWindow(QMainWindow):
-    def __init__(self, ros_node):
+    def __init__(self, twist_node, odom_node):
         super().__init__()
-        self.ros_node = ros_node
+        self.twist_node = twist_node
+        self.odom_node = odom_node
         self.bag_process = None
 
         # Load the .ui file
@@ -82,6 +102,16 @@ class MainWindow(QMainWindow):
         self.ui.btn_stop_record.clicked.connect(self.stop_recording)
         self.ui.btn_shutdown.clicked.connect(self.shutdown_all)
         
+                # ---- Odometry plot setup ----
+        self.odom_plot = pg.PlotWidget(title="Odometry (X-Y Path)")
+        self.odom_plot.setLabel('left', 'Y (m)')
+        self.odom_plot.setLabel('bottom', 'X (m)')
+        self.odom_plot.showGrid(x=True, y=True)
+        self.odom_plot.setAspectLocked(True)  # keep equal aspect ratio
+        self.odom_curve = self.odom_plot.plot(pen='g')
+        self.ui.odom_plot_widget.layout().addWidget(self.odom_plot)
+
+
 
         self.ui.show()
         # Timer to update GUI
@@ -91,7 +121,7 @@ class MainWindow(QMainWindow):
         self.timer.start(100)  # update every 100 ms
         
     def update_labels(self):
-        msg = self.ros_node.latest_msg
+        msg = self.twist_node.latest_msg
         self.ui.lbl_linear.setText(f"Linear Velocity: {msg.linear.x:.2f}")
         self.ui.lbl_angular.setText(f"Angular Velocity: {msg.angular.z:.2f}")
 
@@ -128,12 +158,17 @@ class MainWindow(QMainWindow):
         self.bag_process = None
 
     def update_gui(self):
-        msg = self.ros_node.latest_msg
+        msg = self.twist_node.latest_msg
 
         # Update plot
-        x, lin, ang = self.ros_node.get_buffers()
+        x, lin, ang = self.twist_node.get_buffers()
         self.curve_lin.setData(x, lin)
         self.curve_ang.setData(x, ang)
+
+        # Update odometry plot
+        pos = self.odom_node.get_positions()
+        if pos.shape[0] > 1:
+            self.odom_curve.setData(pos[:, 0], pos[:, 1])
     
     def shutdown_all(self):
         reply = QMessageBox.question(
@@ -169,19 +204,23 @@ def ros_spin(node):
 
 def main():
     rclpy.init()
-    node = TwistSubscriber()
+    
+    twist_node = TwistSubscriber()
+    odom_node = OdomSubscriber()
 
-    # Run ROS in background thread
-    ros_thread = threading.Thread(target=ros_spin, args=(node,), daemon=True)
-    ros_thread.start()
+    twist_thread = threading.Thread(target=ros_spin, args=(twist_node,), daemon=True)
+    odom_thread = threading.Thread(target=ros_spin, args=(odom_node,), daemon=True)
+    twist_thread.start()
+    odom_thread.start()
 
     # Start Qt GUI
     app = QApplication(sys.argv)
-    window = MainWindow(node)
+    window = MainWindow(twist_node, odom_node)
     window.show()
 
+
      # --- Allow Ctrl+C to work while Qt is running ---
-    signal.signal(signal.SIGINT, lambda *args: graceful_shutdown(app, node, ros_thread))
+    signal.signal(signal.SIGINT, lambda *args: graceful_shutdown(app, twist_node, odom_node, twist_thread, odom_thread))
     timer = QTimer()
     timer.start(100)
     timer.timeout.connect(lambda: None)  # let Qt process signals
@@ -189,12 +228,12 @@ def main():
     app.exec()
 
     # Cleanup
-    graceful_shutdown(app, node, ros_thread)
+    graceful_shutdown(app, twist_node, odom_node, twist_thread, odom_thread)
 
 if __name__ == '__main__':
     main()
 
-def graceful_shutdown(app, node, ros_thread=None):
+def graceful_shutdown(app, twist_node, odom_node, twist_thread = None, odom_thread = None):
     print("\n[Ctrl+C] Shutting down ROS 2 and GUI gracefully…")
 
     # Stop GUI timers
@@ -209,10 +248,11 @@ def graceful_shutdown(app, node, ros_thread=None):
         print(f"Warning during ROS shutdown: {e}")
 
     # Wait for background threads
-    if ros_thread and ros_thread.is_alive():
-        ros_thread.join(timeout=2.0)
+    if twist_thread and twist_thread.is_alive():
+        twist_thread.join(timeout=2.0)
     
-    
+    if odom_thread and odom_thread.is_alive():
+        odom_thread.join(timeout=2.0)
 
     app.quit()
     sys.exit(0)
