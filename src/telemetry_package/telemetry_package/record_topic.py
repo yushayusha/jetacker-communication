@@ -2,7 +2,7 @@ import rclpy
 import subprocess
 import os
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geographic_msgs.msg import GeoPoseStamped
 import time
 
 class MinimalSubscriber(Node):
@@ -25,18 +25,23 @@ class MinimalSubscriber(Node):
 
     def __init__(self):
         super().__init__('minimal_subscriber')
+        qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
+                                          history=rclpy.qos.HistoryPolicy.KEEP_LAST,
+                                          depth=1)
+
         self.subscription = self.create_subscription(
-            Twist,                # message type
-            '/controller/cmd_vel',     # topic name
+            GeoPoseStamped,                # message type
+            '/ap/geopose/filtered',     # topic name
             self.listener_callback,# callback function
-            10                     # QoS queue size
+            qos_profile=qos_policy                     # QoS queue size
         )
         self.subscription  # prevent unused variable warning
 
     def listener_callback(self, msg):
-        self.get_logger().info(f'Linear X: "{msg.linear.x}"')
-        self.get_logger().info(f'Linear Y: "{msg.linear.y}"')
-        self.get_logger().info(f'Angular Z: "{msg.angular.z}"')
+        self.get_logger().info(f'Orientation X: "{msg.pose.orientation.x}"')
+        self.get_logger().info(f'Orientation Y: "{msg.pose.orientation.y}"')
+        self.get_logger().info(f'Orientation Z: "{msg.pose.orientation.z}"')
+        self.get_logger().info(f'Orientation W: "{msg.pose.orientation.w}"')
 
 def main(args=None):
     rclpy.init(args=args)

@@ -3,9 +3,11 @@ import threading
 import signal
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor
 from pathlib import Path
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from geographic_msgs.msg import GeoPoseStamped
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide6.QtUiTools import QUiLoader
@@ -16,10 +18,35 @@ import pyqtgraph as pg
 import subprocess
 import os
 import time
+# -------------------------------
+# ROS 2 UAV Node Subscribers
+# -------------------------------
+class GeoPoseSubscriber(Node):
+    def __init__(self):
+        super().__init__('geopose_gui_subscriber')
+        self.position = {'latitude': 0.0, 'longitude': 0.0, 'altitude': 0.0}
+        self.orientation = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+        qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
+                                          history=rclpy.qos.HistoryPolicy.KEEP_LAST,
+                                          depth=1)
+
+        self.subscription = self.create_subscription(
+            GeoPoseStamped,                # message type
+            '/ap/geopose/filtered',     # topic name
+            self.callback,# callback function
+            qos_profile=qos_policy                     # QoS queue size
+        )
+        self.get_logger().info("Subscribed to /ap/geopose/filtered")
+
+    def callback(self, msg):
+        p = msg.pose.position
+        q = msg.pose.orientation
+        self.position.update({'latitude': p.latitude, 'longitude': p.longitude, 'altitude': p.altitude})
+        self.orientation.update({'x': q.x, 'y': q.y, 'z': q.z})
 
 
 # -------------------------------
-# ROS 2 Node: subscribes to /controller/cmd_vel
+# ROS 2 UGV Node Subscribers
 # -------------------------------
 class TwistSubscriber(Node):
     def __init__(self, buffer_size=200):
@@ -71,10 +98,11 @@ class OdomSubscriber(Node):
 # Qt GUI Window
 # -------------------------------
 class MainWindow(QMainWindow):
-    def __init__(self, twist_node, odom_node):
+    def __init__(self, twist_node, odom_node, geopose_node):
         super().__init__()
         self.twist_node = twist_node
         self.odom_node = odom_node
+        self.geopose_node = geopose_node
         self.bag_process = None
 
         # Load the .ui file
@@ -82,8 +110,9 @@ class MainWindow(QMainWindow):
         loader = QUiLoader()
         self.ui = loader.load(ui_file, self)
         self.setCentralWidget(self.ui)
+        self.ui.show()
 
-                # --- PyQtGraph setup ---
+         # --- UGV Twist Graph setup ---
         self.plot_widget = self.ui.findChild(pg.GraphicsLayoutWidget, "plot_widget")
         if not self.plot_widget:
             # If the UI only had a generic QWidget, wrap it manually
@@ -111,9 +140,6 @@ class MainWindow(QMainWindow):
         self.odom_curve = self.odom_plot.plot(pen='g')
         self.ui.odom_plot_widget.layout().addWidget(self.odom_plot)
 
-
-
-        self.ui.show()
         # Timer to update GUI
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_labels)
@@ -124,6 +150,14 @@ class MainWindow(QMainWindow):
         msg = self.twist_node.latest_msg
         self.ui.lbl_linear.setText(f"Linear Velocity: {msg.linear.x:.2f}")
         self.ui.lbl_angular.setText(f"Angular Velocity: {msg.angular.z:.2f}")
+
+        p = self.geopose_node.position
+        o = self.geopose_node.orientation
+        self.ui.label_position.setText(
+            f"Position: latitude={p['latitude']:.2f}, longitude={p['longitude']:.2f}, altitude={p['altitude']:.2f}")
+        self.ui.label_orientation.setText(
+           f"Orientation: x={o['x']:.2f}, y={o['y']:.2f}, z={o['z']:.2f}")
+
 
     def start_recording(self):
         if self.bag_process is not None:
@@ -199,60 +233,40 @@ class MainWindow(QMainWindow):
 # -------------------------------
 # ROS + Qt Integration
 # -------------------------------
-def ros_spin(node):
-    rclpy.spin(node)
 
 def main():
     rclpy.init()
     
     twist_node = TwistSubscriber()
     odom_node = OdomSubscriber()
+    geopose_node = GeoPoseSubscriber()
 
-    twist_thread = threading.Thread(target=ros_spin, args=(twist_node,), daemon=True)
-    odom_thread = threading.Thread(target=ros_spin, args=(odom_node,), daemon=True)
-    twist_thread.start()
-    odom_thread.start()
+    executor = SingleThreadedExecutor()
+    executor.add_node(twist_node)
+    executor.add_node(odom_node)
+    executor.add_node(geopose_node)
+
 
     # Start Qt GUI
     app = QApplication(sys.argv)
-    window = MainWindow(twist_node, odom_node)
+    
+    window = MainWindow(twist_node, odom_node, geopose_node)
     window.show()
 
 
      # --- Allow Ctrl+C to work while Qt is running ---
-    signal.signal(signal.SIGINT, lambda *args: graceful_shutdown(app, twist_node, odom_node, twist_thread, odom_thread))
-    timer = QTimer()
-    timer.start(100)
-    timer.timeout.connect(lambda: None)  # let Qt process signals
+    ros_timer = QTimer()
+    ros_timer.timeout.connect(lambda: executor.spin_once(timeout_sec=0.05))
+    ros_timer.start(50)
 
     app.exec()
 
     # Cleanup
-    graceful_shutdown(app, twist_node, odom_node, twist_thread, odom_thread)
+    executor.shutdown()
+    rclpy.shutdown()
+    twist_node.destroy_node()
+    odom_node.destroy_node()
+    geopose_node.destroy_node()
 
 if __name__ == '__main__':
     main()
-
-def graceful_shutdown(app, twist_node, odom_node, twist_thread = None, odom_thread = None):
-    print("\n[Ctrl+C] Shutting down ROS 2 and GUI gracefully…")
-
-    # Stop GUI timers
-    for w in app.topLevelWidgets():
-        if hasattr(w, "timer"):
-            w.timer.stop()
-
-    # Shut down ROS 2
-    try:
-        rclpy.shutdown()
-    except Exception as e:
-        print(f"Warning during ROS shutdown: {e}")
-
-    # Wait for background threads
-    if twist_thread and twist_thread.is_alive():
-        twist_thread.join(timeout=2.0)
-    
-    if odom_thread and odom_thread.is_alive():
-        odom_thread.join(timeout=2.0)
-
-    app.quit()
-    sys.exit(0)

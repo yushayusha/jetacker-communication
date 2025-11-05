@@ -30,7 +30,7 @@
      <depend>signal</depend>
      <depend>datetime</depend>
      <depend>nav_msgs.msg</depend>
-
+      <depend>geographic_msgs.msg</depend>
      
   </export>
 </package>
