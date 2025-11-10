@@ -36,7 +36,6 @@ class GeoPoseSubscriber(Node):
             self.callback,# callback function
             qos_profile=qos_policy                     # QoS queue size
         )
-        self.get_logger().info("Subscribed to /ap/geopose/filtered")
 
     def callback(self, msg):
         p = msg.pose.position
@@ -98,11 +97,11 @@ class OdomSubscriber(Node):
 # Qt GUI Window
 # -------------------------------
 class MainWindow(QMainWindow):
-    def __init__(self, twist_node, odom_node, geopose_node):
+    def __init__(self, nodelist):
         super().__init__()
-        self.twist_node = twist_node
-        self.odom_node = odom_node
-        self.geopose_node = geopose_node
+        self.twist_node = nodelist[0]
+        self.odom_node = nodelist[1]
+        self.geopose_node = nodelist[2]
         self.bag_process = None
 
         # Load the .ui file
@@ -237,20 +236,17 @@ class MainWindow(QMainWindow):
 def main():
     rclpy.init()
     
-    twist_node = TwistSubscriber()
-    odom_node = OdomSubscriber()
-    geopose_node = GeoPoseSubscriber()
+    nodelist = [TwistSubscriber(), OdomSubscriber(), GeoPoseSubscriber()]    
 
     executor = SingleThreadedExecutor()
-    executor.add_node(twist_node)
-    executor.add_node(odom_node)
-    executor.add_node(geopose_node)
+    for i in nodelist:
+        executor.add_node(i)
 
 
     # Start Qt GUI
     app = QApplication(sys.argv)
     
-    window = MainWindow(twist_node, odom_node, geopose_node)
+    window = MainWindow(nodelist)
     window.show()
 
 
@@ -264,9 +260,8 @@ def main():
     # Cleanup
     executor.shutdown()
     rclpy.shutdown()
-    twist_node.destroy_node()
-    odom_node.destroy_node()
-    geopose_node.destroy_node()
+    for i in nodelist:
+        i.destroy_node()
 
 if __name__ == '__main__':
     main()
