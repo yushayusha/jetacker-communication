@@ -7,7 +7,8 @@ from rclpy.executors import SingleThreadedExecutor
 from pathlib import Path
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from geographic_msgs.msg import GeoPoseStamped
+from sensor_msgs.msg import Imu, MagneticField
+from geometry_msgs.msg import Vector3
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide6.QtUiTools import QUiLoader
@@ -18,34 +19,105 @@ import pyqtgraph as pg
 import subprocess
 import os
 import time
+from pymavlink import mavutil
+
 # -------------------------------
-# ROS 2 UAV Node Subscribers
+# ROS 2 UAV Nodes
 # -------------------------------
-class GeoPoseSubscriber(Node):
+
+master = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
+    # Wait for the heartbeat msg to find the system ID
+master.wait_heartbeat()
+print(f"Heartbeat from system (system {master.target_system} component {master.target_component})")
+
+
+class PixhawkImuPublisher(Node):
     def __init__(self):
-        super().__init__('geopose_gui_subscriber')
-        self.position = {'latitude': 0.0, 'longitude': 0.0, 'altitude': 0.0}
-        self.orientation = {'x': 0.0, 'y': 0.0, 'z': 0.0}
-        qos_policy = rclpy.qos.QoSProfile(reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
-                                          history=rclpy.qos.HistoryPolicy.KEEP_LAST,
-                                          depth=1)
+        super().__init__('imu_publisher')
+        self.imu_pub = self.create_publisher(Imu, 'imu/data_raw', 10)
+        self.mag_pub = self.create_publisher(MagneticField, 'imu/mag', 10)
+        self.timer = self.create_timer(0.02, self.timer_callback)  # 50 Hz
 
-        self.subscription = self.create_subscription(
-            GeoPoseStamped,                # message type
-            '/ap/geopose/filtered',     # topic name
-            self.callback,# callback function
-            qos_profile=qos_policy                     # QoS queue size
-        )
+    def timer_callback(self):
+        imu_data = get_imu_data()
+        if imu_data is None:
+            return
 
-    def callback(self, msg):
-        p = msg.pose.position
-        q = msg.pose.orientation
-        self.position.update({'latitude': p.latitude, 'longitude': p.longitude, 'altitude': p.altitude})
-        self.orientation.update({'x': q.x, 'y': q.y, 'z': q.z})
+        ax, ay, az, gx, gy, gz, mx, my, mz = imu_data
+
+        imu_msg = Imu()
+        imu_msg.header.stamp = self.get_clock().now().to_msg()
+        imu_msg.header.frame_id = 'imu_link'
+
+        # Fill linear acceleration (m/s^2)
+        imu_msg.linear_acceleration.x = float(ax)
+        imu_msg.linear_acceleration.y = float(ay)
+        imu_msg.linear_acceleration.z = float(az)
+
+        # Fill angular velocity (rad/s)
+        imu_msg.angular_velocity.x = float(gx)
+        imu_msg.angular_velocity.y = float(gy)
+        imu_msg.angular_velocity.z = float(gz)
+
+        # Orientation unknown
+        imu_msg.orientation_covariance[0] = -1  # indicates unknown
+
+        self.imu_pub.publish(imu_msg)
+
+        # Publish magnetometer separately
+        mag_msg = MagneticField()
+        mag_msg.header = imu_msg.header
+        mag_msg.magnetic_field.x = float(mx)
+        mag_msg.magnetic_field.y = float(my)
+        mag_msg.magnetic_field.z = float(mz)
+        self.mag_pub.publish(mag_msg)
+
+def get_imu_data():
+    # Request the RAW_IMU stream
+    master.mav.request_data_stream_send(
+        master.target_system,
+        master.target_component,
+        mavutil.mavlink.MAV_DATA_STREAM_RAW_SENSORS,
+        50,  # Rate in Hz
+        1    # Start streaming
+    )
+
+    msg = master.recv_match(type='RAW_IMU', blocking=True)
+    if msg:
+        # Convert raw sensor values to SI units
+        ax = msg.xacc * 9.81 / 1000  # assuming milli-g
+        ay = msg.yacc * 9.81 / 1000
+        az = msg.zacc * 9.81 / 1000
+
+        gx = msg.xgyro * (3.14159 / 180 / 1000)  # assuming millidegrees/sec
+        gy = msg.ygyro * (3.14159 / 180 / 1000)
+        gz = msg.zgyro * (3.14159 / 180 / 1000)
+
+        mx = msg.xmag  # raw units, may need calibration
+        my = msg.ymag
+        mz = msg.zmag
+
+        return ax, ay, az, gx, gy, gz, mx, my, mz
+    return None
+
+
+class PixhawkImuSubscriber(Node):
+    def __init__(self):
+        super().__init__('imu_gui_subscriber')
+        self.imu_data = None
+        self.mag_data = None
+        self.create_subscription(Imu, 'imu/data_raw', self.imu_callback, 10)
+        self.create_subscription(MagneticField, 'imu/mag', self.mag_callback, 10)
+
+    def imu_callback(self, msg):
+        self.imu_data = msg
+
+    def mag_callback(self, msg):
+        self.mag_data = msg
 
 
 # -------------------------------
-# ROS 2 UGV Node Subscribers
+# ROS 2 UGV Nodes
 # -------------------------------
 class TwistSubscriber(Node):
     def __init__(self, buffer_size=200):
@@ -101,7 +173,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.twist_node = nodelist[0]
         self.odom_node = nodelist[1]
-        self.geopose_node = nodelist[2]
+        self.pixhawk_imu_node = nodelist[3]
         self.bag_process = None
 
         # Load the .ui file
@@ -150,12 +222,24 @@ class MainWindow(QMainWindow):
         self.ui.lbl_linear.setText(f"Linear Velocity: {msg.linear.x:.2f}")
         self.ui.lbl_angular.setText(f"Angular Velocity: {msg.angular.z:.2f}")
 
-        p = self.geopose_node.position
-        o = self.geopose_node.orientation
-        self.ui.label_position.setText(
-            f"Position: latitude={p['latitude']:.2f}, longitude={p['longitude']:.2f}, altitude={p['altitude']:.2f}")
-        self.ui.label_orientation.setText(
-           f"Orientation: x={o['x']:.2f}, y={o['y']:.2f}, z={o['z']:.2f}")
+        if self.pixhawk_imu_node.imu_data:
+            imu = self.pixhawk_imu_node.imu_data
+            self.ui.ax_label.setText(f"Linear Acceleration X:{imu.linear_acceleration.x:.2f}")
+            self.ui.ay_label.setText(f"Linear Acceleration Y:{imu.linear_acceleration.y:.2f}")
+            self.ui.az_label.setText(f"Linear Acceleration Z:{imu.linear_acceleration.z:.2f}")
+            self.ui.gx_label.setText(f"Angular Velocity X:{imu.angular_velocity.x:.2f}")
+            self.ui.gy_label.setText(f"Angular Velocity Y:{imu.angular_velocity.y:.2f}")
+            self.ui.gz_label.setText(f"Angular Velocity Z:{imu.angular_velocity.z:.2f}")
+
+        if self.pixhawk_imu_node.mag_data:
+            mag = self.pixhawk_imu_node.mag_data
+            self.ui.mx_label.setText(f"Magnetic Field X:{mag.magnetic_field.x:.2f}")
+            self.ui.my_label.setText(f"Magnetic Field Y: {mag.magnetic_field.y:.2f}")
+            self.ui.mz_label.setText(f"Magnetic Field Z:{mag.magnetic_field.z:.2f}")
+
+
+
+
 
 
     def start_recording(self):
@@ -168,7 +252,7 @@ class MainWindow(QMainWindow):
         bag_dir = "rosbags/bag_"+ timestr +"/"
 
         # Choose topics (modify as needed)
-        topics = ["/slam_toolbox/scan_visualization", "/slam_toolbox/feedback", "/slam_toolbox/graph_visualization", "/slam_toolbox/update", "/tf", "/tf_static", "/controller/cmd_vel"]
+        topics = ["/slam_toolbox/scan_visualization", "/slam_toolbox/feedback", "/slam_toolbox/graph_visualization", "/slam_toolbox/update", "/tf", "/tf_static", "/controller/cmd_vel", "imu/data_raw", "imu/mag"]
 
         # Construct command
         cmd = ["ros2", "bag", "record", "-o", bag_dir] + topics
@@ -236,7 +320,7 @@ class MainWindow(QMainWindow):
 def main():
     rclpy.init()
     
-    nodelist = [TwistSubscriber(), OdomSubscriber(), GeoPoseSubscriber()]    
+    nodelist = [TwistSubscriber(), OdomSubscriber(), PixhawkImuPublisher(),PixhawkImuSubscriber()]    
 
     executor = SingleThreadedExecutor()
     for i in nodelist:

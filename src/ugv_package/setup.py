@@ -24,7 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'uav_subscriber_node = ugv_package.uav_subscriber:main'
+            'uav_subscriber_node = ugv_package.uav_subscriber:main',
+            'demo_subscriber_node = ugv_package.demo_subscriber:main',
+            'pixhawk_subscriber_node = ugv_package.pixhawk_subscriber:main'
         ],
     },
 )

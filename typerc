@@ -22,7 +22,6 @@ export ASR_LANGUAGE=Chinese
 export need_compile=False
 #export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=0
-#export ROS_DOMAIN_ID=42 # Numbers from 0 to 232
 #export ROS_LOCALHOST_ONLY=1
 export CYCLONEDDS_URI=file:///etc/cyclonedds/config.xml
 

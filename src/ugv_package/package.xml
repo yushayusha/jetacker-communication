@@ -31,5 +31,7 @@
      <depend>datetime</depend>
      <depend>nav_msgs.msg</depend>
       <depend>geographic_msgs.msg</depend>
+      <depend>sensor_msgs.msg</depend>
+       <depend>math</depend>
   </export>
 </package>
