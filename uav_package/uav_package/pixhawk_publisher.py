@@ -13,8 +13,14 @@ class PixhawkCombinedImu(Node):
         self.pub = self.create_publisher(Imu, '/pixhawk/imu_all', 10)
 
         # Pixhawk connection
-        self.master = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
+        self.master = mavutil.mavlink_connection('/dev/serial0', baud=921600)
+        print("Waiting for heartbeat...")
         self.master.wait_heartbeat()
+
+        print(
+            f"Heartbeat from system "
+            f"(system {self.master.target_system} component {self.master.target_component})"
+        )
 
         # Timer
         self.timer = self.create_timer(0.02, self.read_imu)  # 50 Hz

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'telemetry_package'
+package_name = 'uav_package'
 
 setup(
     name=package_name,
@@ -14,9 +14,9 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='prachi',
-    maintainer_email='prachi@todo.todo',
+    maintainer_email='prachi2004@tamu.edu',
     description='TODO: Package description',
-    license='TODO: License declaration',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
@@ -24,12 +24,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'main_gui_node = telemetry_package.main_gui:main',
-            'challenge_one_fsm = telemetry_package.challenge_one_fsm:main',
-            'uav_subscribers_node = telemetry_package.uav_subscribers:main',
-            'ugv_subscribers_node = telemetry_package.ugv_subscribers:main',
-            'listener = telemetry_package.subscriber_member_function:main',
-
         ],
     },
 )

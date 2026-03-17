@@ -35,5 +35,8 @@
      <depend>PIL</depend>
      <depend>pymavlink</depend>
      <depend>math</depend>
+<exec_depend>std_msgs</exec_depend>
+
+
   </export>
 </package>

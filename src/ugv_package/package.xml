@@ -23,7 +23,6 @@
     <depend>os</depend>
     <depend>time</depend>
     <depend>rosbag2_py</depend>
-     <depend>signal</depend>
      <depend>pathlib</depend>
      <depend>numpy</depend>
      <depend>pyqtgraph</depend>
