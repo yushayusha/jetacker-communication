@@ -24,10 +24,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'main_gui_node = telemetry_package.main_gui:main',
-            'challenge_one_fsm = telemetry_package.challenge_one_fsm:main',
-            'uav_subscribers_node = telemetry_package.uav_subscribers:main',
-            'ugv_subscribers_node = telemetry_package.ugv_subscribers:main',
+            'main_gui= telemetry_package.main_gui:main',
+            'fsm_info = telemetry_package.finite_state_machine:main',
+            'uav_info = telemetry_package.uav_subscribers:main',
+            'ugv_info = telemetry_package.ugv_subscribers:main',
             'listener = telemetry_package.subscriber_member_function:main',
 
         ],

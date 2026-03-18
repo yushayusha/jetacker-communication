@@ -12,45 +12,6 @@ from std_msgs.msg import String
 import os
 
 
-class PublishStateTime(PublisherState):
-    """
-    PublishIntState is a YASMIN ROS publisher state that sends incrementing integers
-    to the 'count' topic using std_msgs.msg.Int32 messages.
-
-    This state increments a counter on the blackboard and publishes it.
-    """
-
-    def __init__(self):
-        """
-        Initializes the PublishIntState with the topic 'count' and a message creation callback.
-        """
-        super().__init__(String, "state_time", self.create_int_msg)
-
-    def create_int_msg(self, blackboard: Blackboard) -> String:
-        """
-        Generates a std_msgs.msg.Int32 message with an incremented counter value.
-
-        Args:
-            blackboard (Blackboard): The shared data store between states.
-
-        Returns:
-            Int32: A ROS message containing the updated counter.
-        """
-        # Get and increment the counter from the blackboard
-        counter = blackboard.get("counter")
-        counter += 1
-        blackboard.set("counter", counter)
-
-        # Log the message creation
-        yasmin.YASMIN_LOG_INFO(f"Creating message {counter}")
-
-        # Create and return the message
-        msg = String()
-        msg.data = counter
-        return msg
-    
-
-
 # Define the FooState class, inheriting from the State class
 class InitializeParams(State):
     """
