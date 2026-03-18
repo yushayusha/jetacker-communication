@@ -11,6 +11,23 @@ from yasmin_ros import PublisherState
 from std_msgs.msg import String
 import os
 
+from yasmin_msgs.msg import (
+    State as StateMsg,
+    StateMachine as StateMachineMsg,
+    Transition as TransitionMsg,
+)
+from rclpy.node import Node
+
+
+class FSMSubscriber(Node):
+    def __init__(self):
+        super().__init__('fsm_subscriber')
+        self.create_subscription(StateMachine, "/fsm_viewer",self.callback, 10)
+
+    def callback(self, StateMachineMsg):
+        self.get_logger().info('I heard: "%s"' % StateMachineMsg.data)
+
+
 
 # Define the FooState class, inheriting from the State class
 class InitializeParams(State):
@@ -296,6 +313,7 @@ def main() -> None:
     # Initialize ROS 2
     rclpy.init()
 
+
     # Set ROS 2 loggers
     set_ros_loggers()
     yasmin.YASMIN_LOG_INFO("YASMIN_FACTORY_DEMO")
@@ -312,13 +330,18 @@ def main() -> None:
 
     # Publish FSM information for visualization
     YasminViewerPub(sm, "YASMIN_DEMO")
-
+    #rclpy.spin(FSMSubscriber())
     # Execute the FSM
     try:
         outcome = sm()
         yasmin.YASMIN_LOG_INFO(outcome)
     except Exception as e:
         yasmin.YASMIN_LOG_WARN(e)
+
+
+
+
+    #FSMSubscriber().destroy_node()
 
     # Shutdown ROS 2 if it's running
     if rclpy.ok():
