@@ -33,6 +33,8 @@ class TwistSubscriber(Node):
         lin = self.linear_buffer[:count]
         ang = self.angular_buffer[:count]
         return x, lin, ang
+    
+    
 
 class OdomSubscriber(Node):
     def __init__(self, buffer_size=2000):
