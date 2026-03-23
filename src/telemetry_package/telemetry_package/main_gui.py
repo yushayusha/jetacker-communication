@@ -28,6 +28,7 @@ class MainWindow(QMainWindow):
         self.odom_node = nodelist[1]
         self.pixhawk_imu_node = nodelist[3]
         self.bag_process = None
+        self.challenge1_process = None
 
         # Load the .ui file
         ui_file = QFile("robot_dashboard.ui")   
@@ -54,6 +55,7 @@ class MainWindow(QMainWindow):
         self.ui.btn_start_record.clicked.connect(self.start_recording)
         self.ui.btn_stop_record.clicked.connect(self.stop_recording)
         self.ui.btn_shutdown.clicked.connect(self.shutdown_all)
+        self.ui.btn_start_challenge1.clicked.connect(self.start_challenge_1)
         
                 # ---- Odometry plot setup ----
         self.odom_plot = pg.PlotWidget(title="Odometry (X-Y Path)")
@@ -112,6 +114,18 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Recording Started", f"Recording to {bag_dir}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to start rosbag: {e}")
+
+    def start_challenge_1(self):
+        if self.challenge1_process is not None:
+            QMessageBox.warning(self, "Challenge 1", "Challenge 1 is already running.")
+            return
+
+        cmd = ["ros2", "run", "telemetry_package", "fsm_execute"]
+        try:
+            self.challenge1_process = subprocess.Popen(cmd)
+            QMessageBox.information(self, "Starting Challnege 1", f"Challenge 1 Started")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to start challenge 1: {e}")
 
     def stop_recording(self):
         if self.bag_process is None:

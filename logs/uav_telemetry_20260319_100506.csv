@@ -1,0 +1,1 @@
+t_wall_s,ros_time_ns,connected,armed,mode,landed_state,uav_x,uav_y,uav_z,uav_vx,uav_vy,uav_vz,uav_yaw_deg,ugv_x,ugv_y,ugv_z,scan_enabled,scan_progress_cells,scan_total_cells,last_target_source,last_target_x,last_target_y,last_target_z
