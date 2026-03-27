@@ -104,6 +104,7 @@
            <widget class="QPushButton" name="btn_shutdown">
             <property name="text">
              <string>Shutdown All Nodes</string>
+             <string>Shutdown All Nodes</string>
             </property>
            </widget>
           </item>
