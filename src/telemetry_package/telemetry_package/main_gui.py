@@ -1,21 +1,183 @@
 import sys
+import threading
+import signal
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
+from pathlib import Path
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu, MagneticField
+from geometry_msgs.msg import Vector3
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtCore import QFile, QTimer
 
+import numpy as np
 import pyqtgraph as pg
 import subprocess
+import os
 import time
+from pymavlink import mavutil
 
-#Import nodes that subscribe to vehicle data
-from telemetry_package.uav_subscribers import *
-from telemetry_package.ugv_subscribers import *
+# -------------------------------
+# ROS 2 UAV Nodes
+# -------------------------------
+
+master = None
+
+while master is None:
+    try:
+        print("Attempting MAVLink connection...")
+        master = mavutil.mavlink_connection('/dev/ttyACM0', baud=57600)
+
+        print("Waiting for heartbeat...")
+        master.wait_heartbeat(timeout=3)
+
+        print(
+            f"Heartbeat from system "
+            f"(system {master.target_system} component {master.target_component})"
+        )
+
+    except Exception as e:
+        print(f"Connection failed: {e}")
+        print("Retrying in 3 seconds...")
+        master = None
+        time.sleep(3)
+
+class PixhawkImuPublisher(Node):
+    def __init__(self):
+        super().__init__('imu_publisher')
+        self.imu_pub = self.create_publisher(Imu, 'imu/data_raw', 10)
+        self.mag_pub = self.create_publisher(MagneticField, 'imu/mag', 10)
+        self.timer = self.create_timer(0.02, self.timer_callback)  # 50 Hz
+
+    def timer_callback(self):
+        imu_data = get_imu_data()
+        if imu_data is None:
+            return
+
+        ax, ay, az, gx, gy, gz, mx, my, mz = imu_data
+
+        imu_msg = Imu()
+        imu_msg.header.stamp = self.get_clock().now().to_msg()
+        imu_msg.header.frame_id = 'imu_link'
+
+        # Fill linear acceleration (m/s^2)
+        imu_msg.linear_acceleration.x = float(ax)
+        imu_msg.linear_acceleration.y = float(ay)
+        imu_msg.linear_acceleration.z = float(az)
+
+        # Fill angular velocity (rad/s)
+        imu_msg.angular_velocity.x = float(gx)
+        imu_msg.angular_velocity.y = float(gy)
+        imu_msg.angular_velocity.z = float(gz)
+
+        # Orientation unknown
+        imu_msg.orientation_covariance[0] = -1  # indicates unknown
+
+        self.imu_pub.publish(imu_msg)
+
+        # Publish magnetometer separately
+        mag_msg = MagneticField()
+        mag_msg.header = imu_msg.header
+        mag_msg.magnetic_field.x = float(mx)
+        mag_msg.magnetic_field.y = float(my)
+        mag_msg.magnetic_field.z = float(mz)
+        self.mag_pub.publish(mag_msg)
+
+def get_imu_data():
+    # Request the RAW_IMU stream
+    master.mav.request_data_stream_send(
+        master.target_system,
+        master.target_component,
+        mavutil.mavlink.MAV_DATA_STREAM_RAW_SENSORS,
+        50,  # Rate in Hz
+        1    # Start streaming
+    )
+
+    msg = master.recv_match(type='RAW_IMU', blocking=True)
+    if msg:
+        # Convert raw sensor values to SI units
+        ax = msg.xacc * 9.81 / 1000  # assuming milli-g
+        ay = msg.yacc * 9.81 / 1000
+        az = msg.zacc * 9.81 / 1000
+
+        gx = msg.xgyro * (3.14159 / 180 / 1000)  # assuming millidegrees/sec
+        gy = msg.ygyro * (3.14159 / 180 / 1000)
+        gz = msg.zgyro * (3.14159 / 180 / 1000)
+
+        mx = msg.xmag  # raw units, may need calibration
+        my = msg.ymag
+        mz = msg.zmag
+
+        return ax, ay, az, gx, gy, gz, mx, my, mz
+    return None
+
+
+class PixhawkImuSubscriber(Node):
+    def __init__(self):
+        super().__init__('imu_gui_subscriber')
+        self.imu_data = None
+        self.mag_data = None
+        self.create_subscription(Imu, 'imu/data_raw', self.imu_callback, 10)
+        self.create_subscription(MagneticField, 'imu/mag', self.mag_callback, 10)
+
+    def imu_callback(self, msg):
+        self.imu_data = msg
+
+    def mag_callback(self, msg):
+        self.mag_data = msg
+
+
+# -------------------------------
+# ROS 2 UGV Nodes
+# -------------------------------
+class TwistSubscriber(Node):
+    def __init__(self, buffer_size=200):
+        super().__init__('twist_gui_subscriber')
+        self.latest_msg = Twist()
+
+        self.buffer_size = buffer_size
+        self.linear_buffer = np.zeros(buffer_size)
+        self.angular_buffer = np.zeros(buffer_size)
+        self.index = 0
+
+        self.create_subscription(Twist, '/controller/cmd_vel', self.callback, 10)
+
+    def callback(self, msg):
+        self.latest_msg = msg
+        i = self.index % self.buffer_size
+        self.linear_buffer[i] = msg.linear.x
+        self.angular_buffer[i] = msg.angular.z
+        self.index += 1
+    
+    def get_buffers(self):
+        count = min(self.index, self.buffer_size)
+        x = np.arange(count)
+        lin = self.linear_buffer[:count]
+        ang = self.angular_buffer[:count]
+        return x, lin, ang
+
+class OdomSubscriber(Node):
+    def __init__(self, buffer_size=2000):
+        super().__init__('odom_gui_subscriber')
+        self.positions = np.zeros((buffer_size, 2))  # store x, y
+        self.index = 0
+        self.buffer_size = buffer_size
+        self.create_subscription(Odometry, '/odom', self.callback, 10)
+
+    def callback(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        i = self.index % self.buffer_size
+        self.positions[i] = [x, y]
+        self.index += 1
+
+    def get_positions(self):
+        count = min(self.index, self.buffer_size)
+        return self.positions[:count, :]
 
 
 # -------------------------------
@@ -28,6 +190,7 @@ class MainWindow(QMainWindow):
         self.odom_node = nodelist[1]
         self.pixhawk_imu_node = nodelist[3]
         self.bag_process = None
+        self.challenge1_process = None
 
         # Load the .ui file
         ui_file = QFile("robot_dashboard.ui")   
@@ -54,6 +217,7 @@ class MainWindow(QMainWindow):
         self.ui.btn_start_record.clicked.connect(self.start_recording)
         self.ui.btn_stop_record.clicked.connect(self.stop_recording)
         self.ui.btn_shutdown.clicked.connect(self.shutdown_all)
+        self.ui.btn_start_challenge1.clicked.connect(self.start_challenge_1)
         
                 # ---- Odometry plot setup ----
         self.odom_plot = pg.PlotWidget(title="Odometry (X-Y Path)")
@@ -91,6 +255,18 @@ class MainWindow(QMainWindow):
             self.ui.mz_label.setText(f"Magnetic Field Z:{mag.magnetic_field.z:.2f}")
 
 
+    def start_challenge_1(self):
+        if self.challenge1_process is not None:
+            QMessageBox.warning(self, "Challenge 1", "Challenge 1 is already running.")
+            return
+
+        cmd = ["ros2", "run", "telemetry_package", "fsm_execute"]
+        try:
+            self.challenge1_process = subprocess.Popen(cmd)
+            QMessageBox.information(self, "Starting Challnege 1", f"Challenge 1 Started")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to start challenge 1: {e}")
+
     def start_recording(self):
         if self.bag_process is not None:
             QMessageBox.warning(self, "Recording", "Bag recording already running.")
@@ -101,10 +277,9 @@ class MainWindow(QMainWindow):
         bag_dir = "rosbags/bag_"+ timestr +"/"
 
         # Choose topics (modify as needed)
-        # topics = ["/slam_toolbox/scan_visualization", "/slam_toolbox/feedback", "/slam_toolbox/graph_visualization", "/slam_toolbox/update", "/tf", "/tf_static", "/controller/cmd_vel", "imu/data_raw", "imu/mag"]
         topics = ["/slam_toolbox/scan_visualization", "/slam_toolbox/feedback", "/slam_toolbox/graph_visualization", "/slam_toolbox/update", "/tf", "/tf_static", "/controller/cmd_vel", "imu/data_raw", "imu/mag"]
 
-        # Construct command 
+        # Construct command
         cmd = ["ros2", "bag", "record", "-o", bag_dir] + topics
         try:
             self.bag_process = subprocess.Popen(cmd)
@@ -182,6 +357,7 @@ def main():
     
     window = MainWindow(nodelist)
     window.show()
+
 
      # --- Allow Ctrl+C to work while Qt is running ---
     ros_timer = QTimer()

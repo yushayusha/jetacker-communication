@@ -29,7 +29,7 @@ setup(
             'uav_info = telemetry_package.uav_subscribers:main',
             'ugv_info = telemetry_package.ugv_subscribers:main',
             'listener = telemetry_package.subscriber_member_function:main',
-
+            'fsm_execute = telemetry_package.challenge_one_fsm:main',
         ],
     },
 )

@@ -103,7 +103,7 @@
           <item>
            <widget class="QPushButton" name="btn_shutdown">
             <property name="text">
-             <string>Shutdown All Nodes (UGV Kill Switch)</string>
+             <string>Shutdown All Nodes</string>
             </property>
            </widget>
           </item>
@@ -206,6 +206,31 @@
          </layout>
         </item>
        </layout>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <item>
+       <widget class="QPushButton" name="btn_start_challenge1">
+        <property name="text">
+         <string>Start Challenge 1 (FSM only)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_start_challenge2">
+        <property name="text">
+         <string>Start Challenge 2</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btn_start_challenge3">
+        <property name="text">
+         <string>Start Challenge 3</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </item>

@@ -8,25 +8,25 @@ import time
 master = None
 
 while master is None:
-    try:
-        print("Attempting MAVLink connection...")
-        master = mavutil.mavlink_connection('udpin:0.0.0.0:14550', baud=57600)
 
-        print("Waiting for heartbeat...")
-        master.wait_heartbeat(timeout=3)
+    print("Attempting MAVLink connection...")
+    master = mavutil.mavlink_connection('/dev/ttyACM0', baud=9600)
 
-        print(
-            f"Heartbeat from system "
-            f"(system {master.target_system} component {master.target_component})"
-        )
+    print("Waiting for heartbeat...")
+    master.wait_heartbeat(timeout=3)
 
-    except Exception as e:
+    print(
+        f"Heartbeat from system "
+        f"(system {master.target_system} component {master.target_component})"
+    )
+
+"""     except Exception as e:
         print(f"Connection failed: {e}")
         print("Retrying in 3 seconds...")
         master = None
         time.sleep(3)
 
-
+ """
 class PixhawkImuPublisher(Node):
     def __init__(self):
         super().__init__('imu_publisher')
