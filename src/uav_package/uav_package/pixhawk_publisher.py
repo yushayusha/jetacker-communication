@@ -20,8 +20,8 @@ class PixhawkBridge(Node):
         self.state_pub = self.create_publisher(String, '/uav/state', 10)
 
         # MAVLink connection
-        self.get_logger().info("Connecting to Pixhawk...")
-        self.master = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
+        self.get_logger().info("Connecting to Flight Controller...")
+        self.master = mavutil.mavlink_connection('/dev/ttyACM0', baud=57600)
         self.master.wait_heartbeat()
         self.get_logger().info("Connected")
 
@@ -41,14 +41,14 @@ class PixhawkBridge(Node):
             imu = Imu()
 
             # accel (mg → m/s^2)
-            imu.linear_acceleration.x = msg.xacc * 9.80665 / 1000.0
-            imu.linear_acceleration.y = msg.yacc * 9.80665 / 1000.0
-            imu.linear_acceleration.z = msg.zacc * 9.80665 / 1000.0
+            imu.linear_acceleration.x = float(msg.xacc)
+            imu.linear_acceleration.y = float(msg.yacc)
+            imu.linear_acceleration.z = float(msg.zacc)
 
             # gyro (mdps → rad/s)
-            imu.angular_velocity.x = msg.xgyro * math.pi / 180.0 / 1000.0
-            imu.angular_velocity.y = msg.ygyro * math.pi / 180.0 / 1000.0
-            imu.angular_velocity.z = msg.zgyro * math.pi / 180.0 / 1000.0
+            imu.angular_velocity.x = float(msg.xgyro)
+            imu.angular_velocity.y = float(msg.ygyro)
+            imu.angular_velocity.z = float(msg.zgyro)
             self.imu_pub.publish(imu)
 
             mag = MagneticField()
@@ -59,18 +59,17 @@ class PixhawkBridge(Node):
             self.mag_pub.publish(mag)
 
         # ---------------- BATTERY ----------------
-        elif mtype == "BATTERY_STATUS":
+        elif mtype == "SYS_STATUS":
             batt = BatteryState()
-            data = msg.to_dict()
 
-            batt.voltage = data.voltages
-            batt.current = data.current_battery
-            batt.percentage = data.battery_remaining
+            batt.voltage = msg.voltage_battery / 1000.0 
+            batt.current = msg.current_battery / 100.0
+            batt.percentage = msg.battery_remaining / 100.0
 
             self.battery_pub.publish(batt)
 
         # ---------------- GPS ----------------
-        elif mtype == "GPS_RAW_INT":
+        elif mtype == "GLOBAL_POSITION_INT":
             gps = NavSatFix()
 
             gps.latitude = msg.lat / 1e7
@@ -85,9 +84,6 @@ class PixhawkBridge(Node):
             state.data = f"Mode: {msg.custom_mode} Armed: {msg.base_mode}"
             self.state_pub.publish(state)
 
-
-        elif msg.get_type() == "ATTITUDE":
-            self.get_logger().info(msg.roll, msg.pitch, msg.yaw)
 
 def main():
     rclpy.init()

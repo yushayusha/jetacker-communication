@@ -19,7 +19,7 @@ import pyqtgraph as pg
 import subprocess
 import os
 import time
-
+import paramiko
 
 # -------------------------------
 # ROS 2 UAV Nodes
@@ -179,16 +179,24 @@ class MainWindow(QMainWindow):
 
 
     def start_challenge_1(self):
-        if self.challenge1_process is not None:
-            QMessageBox.warning(self, "Challenge 1", "Challenge 1 is already running.")
-            return
 
-        cmd = ["ros2", "run", "telemetry_package", "fsm_execute"]
-        try:
-            self.challenge1_process = subprocess.Popen(cmd)
-            QMessageBox.information(self, "Starting Challnege 1", f"Challenge 1 Started")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to start challenge 1: {e}")
+        #connect to UGV
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect("10.42.0.1", username="pi", password="raspberrypi")
+
+        shell = client.invoke_shell()
+        time.sleep(1)
+
+        # Enter container interactively
+        shell.send("ls\n")
+        time.sleep(1)
+
+        time.sleep(2)
+        output = shell.recv(65535).decode()
+        print(output)
+
+        client.close()
 
     def start_recording(self):
         if self.bag_process is not None:
@@ -210,18 +218,6 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Recording Started", f"Recording to {bag_dir}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to start rosbag: {e}")
-
-    def start_challenge_1(self):
-        if self.challenge1_process is not None:
-            QMessageBox.warning(self, "Challenge 1", "Challenge 1 is already running.")
-            return
-
-        cmd = ["ros2", "run", "telemetry_package", "fsm_execute"]
-        try:
-            self.challenge1_process = subprocess.Popen(cmd)
-            QMessageBox.information(self, "Starting Challnege 1", f"Challenge 1 Started")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to start challenge 1: {e}")
 
     def stop_recording(self):
         if self.bag_process is None:
