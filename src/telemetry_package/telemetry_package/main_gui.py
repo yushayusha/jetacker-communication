@@ -180,23 +180,42 @@ class MainWindow(QMainWindow):
 
     def start_challenge_1(self):
 
-        #connect to UGV
+        #connect to UAV
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect("10.42.0.1", username="pi", password="raspberrypi")
+        client.connect("192.168.149.192", username="pi", password="raspberrypi")
 
         shell = client.invoke_shell()
         time.sleep(1)
 
         # Enter container interactively
-        shell.send("ls\n")
+        shell.send("cd ros2_ws \n")
         time.sleep(1)
+        shell.send("source start.sh \n")
 
-        time.sleep(2)
         output = shell.recv(65535).decode()
         print(output)
 
         client.close()
+
+        #connect to UGV
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect("192.168.149.1", username="pi", password="raspberrypi")
+
+        shell = client.invoke_shell()
+        time.sleep(1)
+
+        # Enter container interactively
+        shell.send("docker exec -it -u ubuntu -w /home/ubuntu a738b3409c59 /bin/zsh -c \"source .zshrc && ros2 topic list\" \n")
+        time.sleep(1)
+
+
+        output = shell.recv(65535).decode()
+        print(output)
+
+        client.close()
+
 
     def start_recording(self):
         if self.bag_process is not None:

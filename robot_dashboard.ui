@@ -221,7 +221,7 @@
       <item>
        <widget class="QPushButton" name="btn_start_challenge1">
         <property name="text">
-         <string>Start Challenge 1 (FSM only)</string>
+         <string>Start Challenge 1</string>
         </property>
        </widget>
       </item>
