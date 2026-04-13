@@ -25,6 +25,9 @@ setup(
     entry_points={
         'console_scripts': [
             'pixhawk_publisher = uav_package.pixhawk_publisher:main',
+            'waypoints = uav_package.waypoints:main',
+            'send_csv = uav_package.send_csv:main',
+            'get_csv = uav_package.get_csv:main',
         ],
     },
 )
