@@ -209,15 +209,15 @@ class MainWindow(QMainWindow):
         time.sleep(1)
 
         # Enter container interactively
-        shell.send("zsh -c 'docker exec -it -u ubuntu -w /home/ubuntu a738b3409c59 /bin/zsh -c \"source ~/.zshrc; sleep 5; source start_challenge1.sh\"' \n")
-        time.sleep(20)
+        shell.send("zsh -c 'docker exec -it -u ubuntu -w /home/ubuntu a738b3409c59 /bin/zsh -c \"source ~/.zshrc; sleep 5; source start_challenge1.sh /home/ubuntu/mission.csv\"' \n")
+        time.sleep(120)
 
         output = shell.recv(65535).decode()
         print(output)
 
         client.close() 
 
-
+        # ros2 topic pub --once /uav_to_ugv/command std_msgs/msg/String {data:'{"command": "START_MOVING"}'}
     def start_recording(self):
         if self.bag_process is not None:
             QMessageBox.warning(self, "Recording", "Bag recording already running.")
