@@ -5,9 +5,6 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
 import numpy as np
-# -------------------------------
-# ROS 2 UGV Nodes
-# -------------------------------
 class TwistSubscriber(Node):
     def __init__(self, buffer_size=200):
         super().__init__('twist_gui_subscriber')
@@ -52,4 +49,5 @@ class OdomSubscriber(Node):
     def get_positions(self):
         count = min(self.index, self.buffer_size)
         return self.positions[:count, :]
+
 

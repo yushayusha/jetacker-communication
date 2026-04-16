@@ -5,10 +5,9 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from pathlib import Path
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Vector3
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, MagneticField, BatteryState
-from geometry_msgs.msg import Vector3
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide6.QtUiTools import QUiLoader
@@ -137,6 +136,8 @@ class MainWindow(QMainWindow):
         self.ui.btn_stop_record.clicked.connect(self.stop_recording)
         self.ui.btn_shutdown.clicked.connect(self.shutdown_all)
         self.ui.btn_start_challenge1.clicked.connect(self.start_challenge_1)
+        self.ui.btn_start_challenge2.clicked.connect(self.start_challenge_2)
+        self.ui.btn_start_challenge3.clicked.connect(self.start_challenge_3)
         
                 # ---- Odometry plot setup ----
         self.odom_plot = pg.PlotWidget(title="Odometry (X-Y Path)")
@@ -180,44 +181,65 @@ class MainWindow(QMainWindow):
 
     def start_challenge_1(self):
 
-        """     
         #connect to UAV
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        #client.connect("192.168.149.192", username="pi", password="raspberrypi")
-        client.connect("10.42.0.1", username="pi", password="raspberrypi")
+        client.connect("192.168.149.192", username="pi", password="raspberrypi")
+        #client.connect("10.42.0.1", username="pi", password="raspberrypi")
         shell = client.invoke_shell()
         time.sleep(1)
 
         # Enter container interactively
         shell.send("cd ros2_ws \n")
         time.sleep(1)
-        shell.send("source start.sh \n")
+        shell.send("source start_challenge1.sh \n")
         time.sleep(10)
         output = shell.recv(65535).decode()
         print(output)
         
         client.close() 
-        """
-    
-        #connect to UGV
+
+    def start_challenge_2(self):
+
+        #connect to UAV
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect("192.168.149.1", username="pi", password="raspberrypi")
-
+        client.connect("192.168.149.192", username="pi", password="raspberrypi")
+        #client.connect("10.42.0.1", username="pi", password="raspberrypi")
         shell = client.invoke_shell()
         time.sleep(1)
 
         # Enter container interactively
-        shell.send("zsh -c 'docker exec -it -u ubuntu -w /home/ubuntu a738b3409c59 /bin/zsh -c \"source ~/.zshrc; sleep 5; source start_challenge1.sh /home/ubuntu/mission.csv\"' \n")
-        time.sleep(120)
-
+        shell.send("cd ros2_ws \n")
+        time.sleep(1)
+        shell.send("source start_challenge2.sh \n")
+        time.sleep(10)
         output = shell.recv(65535).decode()
         print(output)
-
+        
         client.close() 
 
-        # ros2 topic pub --once /uav_to_ugv/command std_msgs/msg/String {data:'{"command": "START_MOVING"}'}
+    def start_challenge_3(self):
+
+        #connect to UAV
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect("192.168.149.192", username="pi", password="raspberrypi")
+        #client.connect("10.42.0.1", username="pi", password="raspberrypi")
+        shell = client.invoke_shell()
+        time.sleep(1)
+
+        # Enter container interactively
+        shell.send("cd ros2_ws \n")
+        time.sleep(1)
+        shell.send("source start_challenge3.sh \n")
+        time.sleep(10)
+        output = shell.recv(65535).decode()
+        print(output)
+        
+        client.close() 
+
+
     def start_recording(self):
         if self.bag_process is not None:
             QMessageBox.warning(self, "Recording", "Bag recording already running.")
@@ -267,7 +289,7 @@ class MainWindow(QMainWindow):
         reply = QMessageBox.question(
             self,
             "Confirm Shutdown",
-            "Are you sure you want to shut down all ROS 2 nodes?",
+            "Are you sure you want to shut down all UGV processes?",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -275,19 +297,28 @@ class MainWindow(QMainWindow):
 
         print("Shutting down all ROS 2 nodes...")
 
-        # Stop timers or other GUI loops
-        if hasattr(self, "timer"):
-            self.timer.stop()
-
-        # Shut down ROS 2
+        # Shut down UGV
         try:
-            rclpy.shutdown()
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect("192.168.149.1", username="pi", password="raspberrypi")
+
+            shell = client.invoke_shell()
+            time.sleep(2)
+
+            # Enter container interactively
+            shell.send(
+                "zsh -c 'docker exec -it -u ubuntu -w /home/ubuntu a738b3409c59 "
+                "/bin/zsh -c \"pkill -9 -f ros2 && pkill -9 -f python3 && pkill -9 -f sllidar\"' \n"
+            )
+
+            time.sleep(2)
+
+            output = shell.recv(65535).decode()
+            print(output)
         except Exception as e:
             print(f"Warning: ROS shutdown failed: {e}")
-
-        # Close the GUI
-        self.close()
-        sys.exit(0)
+    
 
 # -------------------------------
 # ROS + Qt Integration
@@ -319,6 +350,7 @@ def main():
 
     # Cleanup
     executor.shutdown()
+    ros_timer.stop()
     rclpy.shutdown()
     for i in nodelist:
         i.destroy_node()

@@ -103,7 +103,7 @@
           <item>
            <widget class="QPushButton" name="btn_shutdown">
             <property name="text">
-             <string>Shutdown All Nodes</string>
+             <string>UGV Kill Switch</string>
             </property>
            </widget>
           </item>
